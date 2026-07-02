@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Pencil,
   Plus,
   Printer,
   Repeat,
@@ -17,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PopoverSelect } from '@/components/ui/popover-select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 
@@ -131,6 +132,7 @@ export function AtelierPlanning() {
   const [equipeId, setEquipeId] = useState(1)
   const [duree, setDuree] = useState(7)
   const [bulkBonnetierId, setBulkBonnetierId] = useState(0)
+  const [editTarget, setEditTarget] = useState<{ bonnetier: Bonnetier; entry: PlanningEntry } | null>(null)
   const [clearTarget, setClearTarget] = useState<Bonnetier | null>(null)
   const [desiderataOpen, setDesiderataOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
@@ -371,17 +373,26 @@ export function AtelierPlanning() {
                           <td key={d} className={cn('p-1.5 text-center', d === today && 'bg-accent/[0.04]')}>
                             {entry ? (
                               <div
+                                role="button"
+                                tabIndex={0}
                                 className={cn(
-                                  'group relative w-full rounded-md border px-1 py-1.5 text-[11px] font-medium text-white tabular-nums whitespace-nowrap',
+                                  'group relative w-full rounded-md border px-1 py-1.5 text-[11px] font-medium text-white tabular-nums whitespace-nowrap cursor-pointer transition-shadow hover:ring-1 hover:ring-accent',
                                   equipeOf(entry.debut).solid,
                                 )}
-                                title={`${equipeOf(entry.debut).label} · ${entry.debut} - ${entry.fin}`}
+                                title={`${equipeOf(entry.debut).label} · ${entry.debut} - ${entry.fin} — cliquer pour modifier`}
+                                onClick={() => setEditTarget({ bonnetier: b, entry })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') setEditTarget({ bonnetier: b, entry })
+                                }}
                               >
                                 {entry.debut} - {entry.fin}
                                 <button
                                   type="button"
                                   title="Supprimer"
-                                  onClick={() => deleteMut.mutate(entry.IDplanning_bonnetier)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    deleteMut.mutate(entry.IDplanning_bonnetier)
+                                  }}
                                   className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-white border border-border shadow-sm text-destructive opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                                 >
                                   <X className="h-2.5 w-2.5" />
@@ -464,6 +475,15 @@ export function AtelierPlanning() {
         }}
       />
 
+      <EditEntryDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => {
+          invalidatePlanning()
+          setEditTarget(null)
+        }}
+      />
+
       <DesiderataDialog open={desiderataOpen} onClose={() => setDesiderataOpen(false)} bonnetiers={bonnetiers ?? []} />
 
       {/* Print — placeholder (§18 A-bis) */}
@@ -490,6 +510,101 @@ export function AtelierPlanning() {
 
 const inputClass =
   'w-full h-9 px-2.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring'
+
+// ── Edit-entry dialog — manual per-cell times ─────────────
+
+function EditEntryDialog({
+  target,
+  onClose,
+  onSaved,
+}: {
+  target: { bonnetier: Bonnetier; entry: PlanningEntry } | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [debut, setDebut] = useState('')
+  const [fin, setFin] = useState('')
+  // Re-seed the time inputs whenever a different cell is opened.
+  const [seededId, setSeededId] = useState<number | null>(null)
+  if (target && target.entry.IDplanning_bonnetier !== seededId) {
+    setDebut(target.entry.debut)
+    setFin(target.entry.fin)
+    setSeededId(target.entry.IDplanning_bonnetier)
+  }
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      apiFetch('/planning-atelier/entries', {
+        method: 'POST',
+        // Replace-per-day semantics: re-POSTing the same day swaps the old row.
+        body: JSON.stringify({
+          IDbonnetier: target!.bonnetier.IDbonnetier,
+          entries: [{ date: target!.entry.date, debut, fin }],
+        }),
+      }),
+    onSuccess: onSaved,
+  })
+
+  if (!target) return null
+
+  const valid = /^\d{2}:\d{2}$/.test(debut) && /^\d{2}:\d{2}$/.test(fin)
+  const overnight = valid && fin <= debut
+  const dayLabel = `${DAY_NAMES[new Date(`${target.entry.date}T00:00:00`).getDay()]} ${fmtFr(target.entry.date)}`
+  const preview = valid ? equipeOf(debut) : null
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-sm" onClose={onClose}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-accent" />
+            Modifier le créneau
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-4 space-y-3">
+          <p className="text-sm">
+            <span className="font-medium">
+              {target.bonnetier.prenom} {target.bonnetier.nom}
+            </span>
+            <span className="text-muted-foreground"> — {dayLabel}</span>
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Début</label>
+              <input type="time" value={debut} onChange={(e) => setDebut(e.target.value)} className={inputClass} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Fin</label>
+              <input type="time" value={fin} onChange={(e) => setFin(e.target.value)} className={inputClass} />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground min-h-5">
+            {preview && (
+              <>
+                <span className={cn('h-3 w-3 rounded-sm border', preview.solid)} />
+                {preview.label}
+              </>
+            )}
+            {overnight && <span>· fin le lendemain (nuit)</span>}
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" disabled={!valid || saveMut.isPending} onClick={() => saveMut.mutate()}>
+            {saveMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Enregistrer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function DesiderataDialog({
   open,
