@@ -142,10 +142,8 @@ export function AtelierPlanning() {
   const queryClient = useQueryClient()
 
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()))
-  const [equipeId, setEquipeId] = useState(1)
-  const [duree, setDuree] = useState(7)
-  const [bulkBonnetierId, setBulkBonnetierId] = useState(0)
-  const [editTarget, setEditTarget] = useState<{ bonnetier: Bonnetier; entry: PlanningEntry } | null>(null)
+  const [editTarget, setEditTarget] = useState<{ bonnetier: Bonnetier; date: string; entry?: PlanningEntry } | null>(null)
+  const [fillTarget, setFillTarget] = useState<Bonnetier | null>(null)
   const [clearTarget, setClearTarget] = useState<Bonnetier | null>(null)
   const [desiderataOpen, setDesiderataOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
@@ -157,7 +155,6 @@ export function AtelierPlanning() {
   const from = days[0]
   const to = days[6]
   const today = fmtLocalDate(new Date())
-  const equipe = EQUIPES.find((e) => e.id === equipeId) ?? EQUIPES[0]
 
   const monthLabel = useMemo(() => {
     const thursday = addDays(weekStart, 4)
@@ -182,12 +179,6 @@ export function AtelierPlanning() {
   }, [entries])
 
   const invalidatePlanning = () => queryClient.invalidateQueries({ queryKey: ['atelier-planning'] })
-
-  const createMut = useMutation({
-    mutationFn: (p: { IDbonnetier: number; entries: { date: string; debut: string; fin: string }[] }) =>
-      apiFetch('/planning-atelier/entries', { method: 'POST', body: JSON.stringify(p) }),
-    onSuccess: invalidatePlanning,
-  })
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => apiFetch(`/planning-atelier/entries/${id}`, { method: 'DELETE' }),
@@ -214,26 +205,6 @@ export function AtelierPlanning() {
       }),
     onSuccess: invalidatePlanning,
   })
-
-  const addCell = (bonnetierId: number, date: string) => {
-    createMut.mutate({
-      IDbonnetier: bonnetierId,
-      entries: [{ date, debut: equipe.debut, fin: addHours(equipe.debut, duree) }],
-    })
-  }
-
-  // Legacy "Ajouter": fills the work week (Lundi → Vendredi) for the picked bonnetier.
-  const addWeek = () => {
-    if (bulkBonnetierId === 0) return
-    createMut.mutate({
-      IDbonnetier: bulkBonnetierId,
-      entries: days.slice(1, 6).map((date) => ({
-        date,
-        debut: equipe.debut,
-        fin: addHours(equipe.debut, duree),
-      })),
-    })
-  }
 
   return (
     <div className="h-full flex flex-col gap-3 min-h-0">
@@ -267,42 +238,7 @@ export function AtelierPlanning() {
 
         <div className="flex-1" />
 
-        {/* Bulk add: bonnetier + équipe + durée (legacy top-right controls) */}
-        <PopoverSelect
-          options={(bonnetiers ?? []).map((b) => ({ id: b.IDbonnetier, primary: `${b.prenom} ${b.nom}` }))}
-          value={bulkBonnetierId}
-          onChange={setBulkBonnetierId}
-          emptyLabel="Bonnetier"
-        />
-        <PopoverSelect
-          options={EQUIPES.map((e) => ({ id: e.id, primary: e.label, secondary: e.debut }))}
-          value={equipeId}
-          onChange={setEquipeId}
-          hideEmpty
-        />
-        <PopoverSelect
-          options={DUREES.map((d) => ({ id: d, primary: `${d} H` }))}
-          value={duree}
-          onChange={setDuree}
-          hideEmpty
-        />
-        <Button
-          size="sm"
-          onClick={addWeek}
-          disabled={bulkBonnetierId === 0 || createMut.isPending}
-          className="flex-shrink-0"
-          title="Remplir Lundi → Vendredi pour ce bonnetier"
-        >
-          {createMut.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-          ) : (
-            <Plus className="h-3.5 w-3.5 mr-1" />
-          )}
-          Ajouter
-        </Button>
-
-        <div className="h-6 w-px bg-border" />
-
+        {/* Screen actions — top right */}
         <Button
           variant="outline"
           size="icon"
@@ -393,9 +329,9 @@ export function AtelierPlanning() {
                                   equipeOf(entry.debut).solid,
                                 )}
                                 title={`${equipeOf(entry.debut).label} · ${entry.debut} - ${entry.fin} — cliquer pour modifier`}
-                                onClick={() => setEditTarget({ bonnetier: b, entry })}
+                                onClick={() => setEditTarget({ bonnetier: b, date: d, entry })}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') setEditTarget({ bonnetier: b, entry })
+                                  if (e.key === 'Enter' || e.key === ' ') setEditTarget({ bonnetier: b, date: d, entry })
                                 }}
                               >
                                 {entry.debut} - {entry.fin}
@@ -414,9 +350,8 @@ export function AtelierPlanning() {
                             ) : (
                               <button
                                 type="button"
-                                title={`Ajouter ${equipe.label} ${equipe.debut} - ${addHours(equipe.debut, duree)}`}
-                                onClick={() => addCell(b.IDbonnetier, d)}
-                                disabled={createMut.isPending}
+                                title="Ajouter un créneau"
+                                onClick={() => setEditTarget({ bonnetier: b, date: d })}
                                 className="group w-full h-7 rounded-md transition-colors hover:bg-accent/10"
                               >
                                 <Plus className="h-3.5 w-3.5 mx-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -426,29 +361,40 @@ export function AtelierPlanning() {
                         )
                       })}
                       <td className="p-1.5">
-                        {rowEntries.length > 0 && (
-                          <div className="flex items-center justify-end gap-0.5 pr-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-accent"
-                              title="Dupliquer cette semaine sur la semaine suivante"
-                              disabled={repeatMut.isPending}
-                              onClick={() => repeatMut.mutate(b.IDbonnetier)}
-                            >
-                              <Repeat className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              title="Vider la semaine"
-                              onClick={() => setClearTarget(b)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-end gap-0.5 pr-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-accent"
+                            title="Planifier la semaine"
+                            onClick={() => setFillTarget(b)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          {rowEntries.length > 0 && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-accent"
+                                title="Dupliquer cette semaine sur la semaine suivante"
+                                disabled={repeatMut.isPending}
+                                onClick={() => repeatMut.mutate(b.IDbonnetier)}
+                              >
+                                <Repeat className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                title="Vider la semaine"
+                                onClick={() => setClearTarget(b)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -497,6 +443,16 @@ export function AtelierPlanning() {
         }}
       />
 
+      <WeekFillDialog
+        bonnetier={fillTarget}
+        days={days}
+        onClose={() => setFillTarget(null)}
+        onSaved={() => {
+          invalidatePlanning()
+          setFillTarget(null)
+        }}
+      />
+
       <DesiderataDialog open={desiderataOpen} onClose={() => setDesiderataOpen(false)} bonnetiers={bonnetiers ?? []} />
 
       {/* Print — placeholder (§18 A-bis) */}
@@ -523,6 +479,148 @@ export function AtelierPlanning() {
 
 const inputClass =
   'w-full h-9 px-2.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring'
+
+// ── Week-fill dialog — per-row shift planning (row Pencil button) ──
+
+const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+
+function WeekFillDialog({
+  bonnetier,
+  days,
+  onClose,
+  onSaved,
+}: {
+  bonnetier: Bonnetier | null
+  days: string[] // the visible week, Dimanche → Samedi
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [equipeId, setEquipeId] = useState(1)
+  const [duree, setDuree] = useState(7)
+  // Work-week default: Lundi → Vendredi pre-selected (legacy Ajouter behavior).
+  const [selDays, setSelDays] = useState<Set<number>>(() => new Set([1, 2, 3, 4, 5]))
+  // Re-seed when the dialog opens on a different bonnetier.
+  const [seededId, setSeededId] = useState<number | null>(null)
+  if (bonnetier && bonnetier.IDbonnetier !== seededId) {
+    setEquipeId(1)
+    setDuree(7)
+    setSelDays(new Set([1, 2, 3, 4, 5]))
+    setSeededId(bonnetier.IDbonnetier)
+  }
+
+  const equipe = EQUIPES.find((e) => e.id === equipeId) ?? EQUIPES[0]
+  const fin = addHours(equipe.debut, duree)
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      apiFetch('/planning-atelier/entries', {
+        method: 'POST',
+        body: JSON.stringify({
+          IDbonnetier: bonnetier!.IDbonnetier,
+          entries: [...selDays].sort((a, b) => a - b).map((i) => ({ date: days[i], debut: equipe.debut, fin })),
+        }),
+      }),
+    onSuccess: onSaved,
+  })
+
+  if (!bonnetier) return null
+
+  const toggleDay = (i: number) => {
+    setSelDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-md" onClose={onClose}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-accent" />
+            Planifier la semaine
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-4 space-y-3">
+          <p className="text-sm">
+            <span className="font-medium">
+              {bonnetier.prenom} {bonnetier.nom}
+            </span>
+            <span className="text-muted-foreground">
+              {' '}— du {fmtFr(days[0])} au {fmtFr(days[6])}
+            </span>
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Équipe</label>
+              <PopoverSelect
+                options={EQUIPES.map((e) => ({ id: e.id, primary: e.label, secondary: e.debut }))}
+                value={equipeId}
+                onChange={setEquipeId}
+                hideEmpty
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Durée</label>
+              <PopoverSelect
+                options={DUREES.map((d) => ({ id: d, primary: `${d} H` }))}
+                value={duree}
+                onChange={setDuree}
+                hideEmpty
+              />
+            </div>
+          </div>
+
+          {/* Day toggles — gold-pill segmented style, multi-select */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Jours</label>
+            <div className="flex flex-wrap gap-1">
+              {days.map((d, i) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => toggleDay(i)}
+                  className={cn(
+                    'px-2 py-1 text-xs rounded-md transition-colors flex-1',
+                    selDays.has(i)
+                      ? 'bg-accent text-accent-foreground shadow-sm font-medium'
+                      : 'text-muted-foreground hover:bg-accent/10',
+                  )}
+                >
+                  {DAY_SHORT[i]} {parseInt(d.slice(8, 10), 10)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className={cn('h-3 w-3 rounded-sm border', equipe.solid)} />
+            {equipe.label} · {equipe.debut} - {fin}
+            {selDays.size > 0 && <span>· {selDays.size} jour{selDays.size > 1 ? 's' : ''}</span>}
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" disabled={selDays.size === 0 || createMut.isPending} onClick={() => createMut.mutate()}>
+            {createMut.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Planifier
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // ── Edit-entry dialog — manual per-cell times ─────────────
 
@@ -572,18 +670,20 @@ function EditEntryDialog({
   onClose,
   onSaved,
 }: {
-  target: { bonnetier: Bonnetier; entry: PlanningEntry } | null
+  /** `entry` present = edit an existing block; absent = create one on `date`. */
+  target: { bonnetier: Bonnetier; date: string; entry?: PlanningEntry } | null
   onClose: () => void
   onSaved: () => void
 }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
   // Re-seed the time inputs whenever a different cell is opened.
-  const [seededId, setSeededId] = useState<number | null>(null)
-  if (target && target.entry.IDplanning_bonnetier !== seededId) {
-    setDebut(snapQuarter(target.entry.debut))
-    setFin(snapQuarter(target.entry.fin))
-    setSeededId(target.entry.IDplanning_bonnetier)
+  const [seededKey, setSeededKey] = useState<string | null>(null)
+  const targetKey = target ? `${target.bonnetier.IDbonnetier}|${target.date}` : null
+  if (target && targetKey !== seededKey) {
+    setDebut(snapQuarter(target.entry?.debut ?? EQUIPES[0].debut))
+    setFin(snapQuarter(target.entry?.fin ?? addHours(EQUIPES[0].debut, 7)))
+    setSeededKey(targetKey)
   }
 
   const saveMut = useMutation({
@@ -593,7 +693,7 @@ function EditEntryDialog({
         // Replace-per-day semantics: re-POSTing the same day swaps the old row.
         body: JSON.stringify({
           IDbonnetier: target!.bonnetier.IDbonnetier,
-          entries: [{ date: target!.entry.date, debut: snapQuarter(debut), fin: snapQuarter(fin) }],
+          entries: [{ date: target!.date, debut: snapQuarter(debut), fin: snapQuarter(fin) }],
         }),
       }),
     onSuccess: onSaved,
@@ -601,18 +701,20 @@ function EditEntryDialog({
 
   if (!target) return null
 
+  const isEdit = target.entry !== undefined
   const valid = /^\d{2}:\d{2}$/.test(debut) && /^\d{2}:\d{2}$/.test(fin)
   const overnight = valid && fin <= debut
-  const dayLabel = `${DAY_NAMES[new Date(`${target.entry.date}T00:00:00`).getDay()]} ${fmtFr(target.entry.date)}`
+  const dayLabel = `${DAY_NAMES[new Date(`${target.date}T00:00:00`).getDay()]} ${fmtFr(target.date)}`
   const preview = valid ? equipeOf(debut) : null
+  const TitleIcon = isEdit ? Pencil : Plus
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-sm" onClose={onClose}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Pencil className="h-5 w-5 text-accent" />
-            Modifier le créneau
+            <TitleIcon className="h-5 w-5 text-accent" />
+            {isEdit ? 'Modifier le créneau' : 'Ajouter un créneau'}
           </DialogTitle>
         </DialogHeader>
 
