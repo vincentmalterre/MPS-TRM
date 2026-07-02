@@ -526,6 +526,47 @@ const inputClass =
 
 // ── Edit-entry dialog — manual per-cell times ─────────────
 
+const QUARTER_MINUTES = [0, 15, 30, 45]
+
+/** Hour + minute picker pair constrained to quarter hours. Native
+ *  `<input type="time">` is not used because the Chromium picker ignores
+ *  `step` and offers every minute — these styled dropdowns only offer
+ *  00/15/30/45. PopoverSelect reserves id 0 as its "none" sentinel, so
+ *  option ids are offset by +1. */
+function QuarterTimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string // 'HH:MM', already quarter-snapped
+  onChange: (t: string) => void
+}) {
+  const h = parseInt(value.slice(0, 2), 10) || 0
+  const m = parseInt(value.slice(3, 5), 10) || 0
+  const pad = (x: number) => String(x).padStart(2, '0')
+  const minuteIdx = Math.max(0, QUARTER_MINUTES.indexOf(m))
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <div className="flex gap-1.5">
+        <PopoverSelect
+          options={Array.from({ length: 24 }, (_, i) => ({ id: i + 1, primary: `${pad(i)} h` }))}
+          value={h + 1}
+          onChange={(id) => onChange(`${pad(id - 1)}:${pad(QUARTER_MINUTES[minuteIdx])}`)}
+          hideEmpty
+        />
+        <PopoverSelect
+          options={QUARTER_MINUTES.map((min, i) => ({ id: i + 1, primary: pad(min) }))}
+          value={minuteIdx + 1}
+          onChange={(id) => onChange(`${pad(h)}:${pad(QUARTER_MINUTES[id - 1])}`)}
+          hideEmpty
+        />
+      </div>
+    </div>
+  )
+}
+
 function EditEntryDialog({
   target,
   onClose,
@@ -583,29 +624,9 @@ function EditEntryDialog({
             <span className="text-muted-foreground"> — {dayLabel}</span>
           </p>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Début</label>
-              <input
-                type="time"
-                step={900}
-                value={debut}
-                onChange={(e) => setDebut(e.target.value)}
-                onBlur={() => setDebut(snapQuarter(debut))}
-                className={inputClass}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Fin</label>
-              <input
-                type="time"
-                step={900}
-                value={fin}
-                onChange={(e) => setFin(e.target.value)}
-                onBlur={() => setFin(snapQuarter(fin))}
-                className={inputClass}
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <QuarterTimeField label="Début" value={debut} onChange={setDebut} />
+            <QuarterTimeField label="Fin" value={fin} onChange={setFin} />
           </div>
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground min-h-5">
