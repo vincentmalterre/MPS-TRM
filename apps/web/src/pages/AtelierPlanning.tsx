@@ -119,6 +119,19 @@ function addHours(time: string, hours: number): string {
   return `${String(h).padStart(2, '0')}${time.slice(2)}`
 }
 
+/** Snap 'HH:MM' to the nearest quarter hour (planning granularity: 0/15/30/45). */
+function snapQuarter(t: string): string {
+  const m = t.match(/^(\d{2}):(\d{2})$/)
+  if (!m) return t
+  let h = parseInt(m[1], 10)
+  let min = Math.round(parseInt(m[2], 10) / 15) * 15
+  if (min === 60) {
+    min = 0
+    h = (h + 1) % 24
+  }
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+
 function fmtFr(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR')
 }
@@ -527,8 +540,8 @@ function EditEntryDialog({
   // Re-seed the time inputs whenever a different cell is opened.
   const [seededId, setSeededId] = useState<number | null>(null)
   if (target && target.entry.IDplanning_bonnetier !== seededId) {
-    setDebut(target.entry.debut)
-    setFin(target.entry.fin)
+    setDebut(snapQuarter(target.entry.debut))
+    setFin(snapQuarter(target.entry.fin))
     setSeededId(target.entry.IDplanning_bonnetier)
   }
 
@@ -539,7 +552,7 @@ function EditEntryDialog({
         // Replace-per-day semantics: re-POSTing the same day swaps the old row.
         body: JSON.stringify({
           IDbonnetier: target!.bonnetier.IDbonnetier,
-          entries: [{ date: target!.entry.date, debut, fin }],
+          entries: [{ date: target!.entry.date, debut: snapQuarter(debut), fin: snapQuarter(fin) }],
         }),
       }),
     onSuccess: onSaved,
@@ -573,11 +586,25 @@ function EditEntryDialog({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Début</label>
-              <input type="time" value={debut} onChange={(e) => setDebut(e.target.value)} className={inputClass} />
+              <input
+                type="time"
+                step={900}
+                value={debut}
+                onChange={(e) => setDebut(e.target.value)}
+                onBlur={() => setDebut(snapQuarter(debut))}
+                className={inputClass}
+              />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Fin</label>
-              <input type="time" value={fin} onChange={(e) => setFin(e.target.value)} className={inputClass} />
+              <input
+                type="time"
+                step={900}
+                value={fin}
+                onChange={(e) => setFin(e.target.value)}
+                onBlur={() => setFin(snapQuarter(fin))}
+                className={inputClass}
+              />
             </div>
           </div>
 
