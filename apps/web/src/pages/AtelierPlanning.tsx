@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, API_URL } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -487,23 +487,82 @@ export function AtelierPlanning() {
 
       <DesiderataDialog open={desiderataOpen} onClose={() => setDesiderataOpen(false)} bonnetiers={bonnetiers ?? []} />
 
-      {/* Print — placeholder (§18 A-bis) */}
-      <Dialog open={printOpen} onOpenChange={setPrintOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5 text-accent" />
-              Imprimer le planning
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Printer className="h-12 w-12 mb-3 opacity-40" />
-            <p className="text-sm font-medium">En developpement</p>
-            <p className="text-xs mt-1">Cette fonctionnalite sera disponible prochainement.</p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PrintPlanningDialog open={printOpen} from={from} onClose={() => setPrintOpen(false)} />
     </div>
+  )
+}
+
+// ── Print dialog — comment + live PDF preview (§18.C) ─────
+
+function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: string; onClose: () => void }) {
+  const [comment, setComment] = useState('')
+  // Debounced copy driving the iframe preview, so the PDF isn't re-rendered
+  // on every keystroke.
+  const [previewComment, setPreviewComment] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setPreviewComment(comment), 600)
+    return () => clearTimeout(t)
+  }, [comment])
+  // Fresh comment each time the dialog opens.
+  useEffect(() => {
+    if (!open) {
+      setComment('')
+      setPreviewComment('')
+    }
+  }, [open])
+
+  const pdfUrl = (c: string) => `${API_URL}/planning-atelier/pdf?from=${from}&comment=${encodeURIComponent(c)}`
+  const previewUrl = `${pdfUrl(previewComment)}#view=FitH`
+
+  return (
+    <Dialog open={open} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-5xl h-[85vh] flex flex-col" onClose={onClose}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Printer className="h-5 w-5 text-accent" />
+            Imprimer le planning
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-4 flex-1 min-h-0 flex gap-4">
+          {/* Left: comment form */}
+          <div className="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto px-1">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Commentaire</label>
+              <textarea
+                rows={6}
+                maxLength={500}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Commentaire optionnel affiché en bas du document"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Le commentaire apparaît en rouge en bas du PDF. L'aperçu se met à jour automatiquement.
+            </p>
+          </div>
+
+          {/* Right: PDF preview + actions */}
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <div className="flex-1 min-h-0 rounded-lg border border-border/60 bg-zinc-50 overflow-hidden">
+              <iframe key={previewUrl} src={previewUrl} className="w-full h-full" title="Planning Atelier PDF" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-auto">
+                <Button variant="outline" onClick={onClose}>
+                  Fermer
+                </Button>
+                <Button onClick={() => window.open(pdfUrl(comment), '_blank')}>
+                  <Printer className="h-3.5 w-3.5 mr-1.5" />
+                  Imprimer
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
