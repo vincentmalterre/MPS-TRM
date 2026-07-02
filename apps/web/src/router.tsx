@@ -68,7 +68,8 @@ const AtelierMaintenancePage = createPlaceholder('Maintenance', 'Maintenance des
 const AtelierProductivitePage = createPlaceholder('Productivité', 'Productivité de l\'atelier', TrendingUp)
 const AtelierBonnetierPage = createPlaceholder('Bonnetier', 'Suivi bonnetier', HardHat)
 const AtelierQuizPage = createPlaceholder('Quiz', 'Quiz de formation atelier', GraduationCap)
-const AtelierPlanningPage = createPlaceholder('Planning', 'Planning de l\'atelier', CalendarDays)
+// Planning — real screen
+import { AtelierPlanning } from '@/pages/AtelierPlanning'
 
 // Qualité
 const QualiteDefautsPage = createPlaceholder('Défauts récents', 'Défauts détectés sur les dernières heures de production', AlertTriangle)
@@ -125,7 +126,7 @@ export const router = createBrowserRouter([
       { path: 'atelier/productivite', element: <AtelierProductivitePage /> },
       { path: 'atelier/bonnetier', element: <AtelierBonnetierPage /> },
       { path: 'atelier/quiz', element: <AtelierQuizPage /> },
-      { path: 'atelier/planning', element: <AtelierPlanningPage /> },
+      { path: 'atelier/planning', element: <AtelierPlanning /> },
 
       // Qualité
       { path: 'qualite', element: <Navigate to="/qualite/defauts-recents" replace /> },

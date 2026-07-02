@@ -53,12 +53,18 @@ Mirrors the legacy WinDev app in Tricotage Malterre mode (top → bottom):
 3. **Fils** — Références, Stock, Fournisseurs
 4. **Tombé Métier** — Références, Échantillons, Stock (custom `TmRollIcon`)
 5. **Production** — Gestion des OF, Visitage, Prime, TRS
-6. **Atelier** — Maintenance, Productivité, Bonnetier, Quiz, Planning
+6. **Atelier** — Maintenance, Productivité, Bonnetier, Quiz, **Planning** (`/atelier/planning`, implemented — weekly bonnetier grid over `planning_bonnetier` + desiderata dialog; API route `MPS_NG/apps/api/src/routes/planning-atelier.ts`)
 7. **Qualité** — Défauts récents, Retour client, Analyse
 8. **Rapports** — Production, Lots de fils, État stock fil, Analyse
 9. **Paramètres** — Utilisateurs (admin-only)
 
-All screens are `PagePlaceholder`s for now. Legacy references for each domain: `FEN_Gestion_des_OF.wdw`, `FEN_Machines.wdw`, `FEN_Rapport_de_production.wdw`, etc. in `C:\Mes Projets\TRMPROD\` and the main MPS WinDev project.
+All other screens are `PagePlaceholder`s for now. Legacy references for each domain: `FEN_Gestion_des_OF.wdw`, `FEN_Machines.wdw`, `FEN_Rapport_de_production.wdw`, etc. in `C:\Mes Projets\TRMPROD\` and the main MPS WinDev project (`FI_Planning_Atelier.wdw`, `FEN_Desiderata.wdw` in TRM mode).
+
+### Atelier planning data model (legacy, shared HFSQL)
+
+- `planning_bonnetier` — `IDplanning_bonnetier`, `date_debut`/`date_fin` (DATETIME, one row per bonnetier per worked day), `IDbonnetier`. No équipe column: the shift (Matin/Après-Midi/Nuit) is derived from the start hour. Overnight (Nuit) shifts end on the next day.
+- `bonnetier` — accented columns `prénom`/`archivé` (HFSQL accent rules apply). Grid rows = `archivé=0 AND regleur=0`; regleurs are excluded (roles in `role_employe`: apprenti/bonnetier/visiteur/regleur).
+- `desiderata` — `DATE` (reserved word → returns uppercased; 8-char YYYYMMDD), `description`, `IDbonnetier`, `justifie`, `declare`. Writes use positional INSERT (max+1 PK) to avoid naming the reserved column. "En cours" = date ≥ today.
 
 ## Design system rule
 
