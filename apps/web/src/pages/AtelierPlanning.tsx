@@ -68,7 +68,20 @@ const EQUIPES: Equipe[] = [
   { id: 3, label: 'Nuit', debut: '21:00', solid: 'bg-violet-600 border-violet-600' },
 ]
 
-const DUREES = [6, 7, 8]
+// 'HH:MM' → minutes since midnight, and back (wraps around midnight).
+function toMinutes(t: string): number {
+  return parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10)
+}
+
+function addMinutes(t: string, mins: number): string {
+  const total = (toMinutes(t) + mins + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+/** Shift length in minutes; fin ≤ début means it wraps to the next day. */
+function durationMinutes(debut: string, fin: string): number {
+  return (toMinutes(fin) - toMinutes(debut) + 1440) % 1440 || 1440
+}
 
 /** Which équipe a stored entry belongs to, from its start hour. */
 function equipeOf(debut: string): Equipe {
@@ -142,7 +155,13 @@ export function AtelierPlanning() {
   const queryClient = useQueryClient()
 
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()))
-  const [editTarget, setEditTarget] = useState<{ bonnetier: Bonnetier; date: string; entry?: PlanningEntry } | null>(null)
+  const [editTarget, setEditTarget] = useState<{
+    bonnetier: Bonnetier
+    date: string
+    entry?: PlanningEntry
+    /** Create-mode preset — times of the row's nearest existing shift. */
+    seed?: { debut: string; fin: string }
+  } | null>(null)
   const [fillTarget, setFillTarget] = useState<Bonnetier | null>(null)
   const [clearTarget, setClearTarget] = useState<Bonnetier | null>(null)
   const [desiderataOpen, setDesiderataOpen] = useState(false)
@@ -351,7 +370,19 @@ export function AtelierPlanning() {
                               <button
                                 type="button"
                                 title="Ajouter un créneau"
-                                onClick={() => setEditTarget({ bonnetier: b, date: d })}
+                                onClick={() => {
+                                  // Preset the dialog from the row's nearest existing shift this week.
+                                  const dayIdx = days.indexOf(d)
+                                  const nearest = [...rowEntries].sort(
+                                    (x, y) =>
+                                      Math.abs(days.indexOf(x.date) - dayIdx) - Math.abs(days.indexOf(y.date) - dayIdx),
+                                  )[0]
+                                  setEditTarget({
+                                    bonnetier: b,
+                                    date: d,
+                                    seed: nearest ? { debut: nearest.debut, fin: nearest.fin } : undefined,
+                                  })
+                                }}
                                 className="group w-full h-7 rounded-md transition-colors hover:bg-accent/10"
                               >
                                 <Plus className="h-3.5 w-3.5 mx-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -446,6 +477,7 @@ export function AtelierPlanning() {
       <WeekFillDialog
         bonnetier={fillTarget}
         days={days}
+        weekEntries={fillTarget ? (entries ?? []).filter((e) => e.IDbonnetier === fillTarget.IDbonnetier) : []}
         onClose={() => setFillTarget(null)}
         onSaved={() => {
           invalidatePlanning()
@@ -487,29 +519,39 @@ const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 function WeekFillDialog({
   bonnetier,
   days,
+  weekEntries,
   onClose,
   onSaved,
 }: {
   bonnetier: Bonnetier | null
   days: string[] // the visible week, Dimanche → Samedi
+  weekEntries: PlanningEntry[] // this bonnetier's existing entries in the visible week
   onClose: () => void
   onSaved: () => void
 }) {
   const [equipeId, setEquipeId] = useState(1)
-  const [duree, setDuree] = useState(7)
+  const [debut, setDebut] = useState(EQUIPES[0].debut)
+  const [fin, setFin] = useState(addHours(EQUIPES[0].debut, 7))
   // Work-week default: Lundi → Vendredi pre-selected (legacy Ajouter behavior).
   const [selDays, setSelDays] = useState<Set<number>>(() => new Set([1, 2, 3, 4, 5]))
-  // Re-seed when the dialog opens on a different bonnetier.
+  // Seed from the bonnetier's current week when the dialog opens; reset the
+  // seed marker on close so reopening re-reads fresh values.
   const [seededId, setSeededId] = useState<number | null>(null)
+  if (!bonnetier && seededId !== null) setSeededId(null)
   if (bonnetier && bonnetier.IDbonnetier !== seededId) {
-    setEquipeId(1)
-    setDuree(7)
-    setSelDays(new Set([1, 2, 3, 4, 5]))
+    const first = weekEntries[0]
+    const seedDebut = snapQuarter(first?.debut ?? EQUIPES[0].debut)
+    const seedFin = snapQuarter(first?.fin ?? addHours(EQUIPES[0].debut, 7))
+    setEquipeId(equipeOf(seedDebut).id)
+    setDebut(seedDebut)
+    setFin(seedFin)
+    setSelDays(
+      weekEntries.length > 0
+        ? new Set(weekEntries.map((e) => days.indexOf(e.date)).filter((i) => i >= 0))
+        : new Set([1, 2, 3, 4, 5]),
+    )
     setSeededId(bonnetier.IDbonnetier)
   }
-
-  const equipe = EQUIPES.find((e) => e.id === equipeId) ?? EQUIPES[0]
-  const fin = addHours(equipe.debut, duree)
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -517,13 +559,27 @@ function WeekFillDialog({
         method: 'POST',
         body: JSON.stringify({
           IDbonnetier: bonnetier!.IDbonnetier,
-          entries: [...selDays].sort((a, b) => a - b).map((i) => ({ date: days[i], debut: equipe.debut, fin })),
+          entries: [...selDays]
+            .sort((a, b) => a - b)
+            .map((i) => ({ date: days[i], debut: snapQuarter(debut), fin: snapQuarter(fin) })),
         }),
       }),
     onSuccess: onSaved,
   })
 
   if (!bonnetier) return null
+
+  const equipe = EQUIPES.find((e) => e.id === equipeId) ?? equipeOf(debut)
+  // Équipe quick-preset: moves début to the shift's standard start, keeping
+  // the currently chosen duration.
+  const applyEquipe = (id: number) => {
+    const e = EQUIPES.find((x) => x.id === id) ?? EQUIPES[0]
+    const dur = durationMinutes(debut, fin)
+    setEquipeId(id)
+    setDebut(e.debut)
+    setFin(addMinutes(e.debut, dur))
+  }
+  const overnight = fin <= debut
 
   const toggleDay = (i: number) => {
     setSelDays((prev) => {
@@ -554,25 +610,26 @@ function WeekFillDialog({
             </span>
           </p>
 
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Équipe</label>
+            <PopoverSelect
+              options={EQUIPES.map((e) => ({ id: e.id, primary: e.label, secondary: e.debut }))}
+              value={equipeId}
+              onChange={applyEquipe}
+              hideEmpty
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Équipe</label>
-              <PopoverSelect
-                options={EQUIPES.map((e) => ({ id: e.id, primary: e.label, secondary: e.debut }))}
-                value={equipeId}
-                onChange={setEquipeId}
-                hideEmpty
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Durée</label>
-              <PopoverSelect
-                options={DUREES.map((d) => ({ id: d, primary: `${d} H` }))}
-                value={duree}
-                onChange={setDuree}
-                hideEmpty
-              />
-            </div>
+            <QuarterTimeField
+              label="Début"
+              value={debut}
+              onChange={(t) => {
+                setDebut(t)
+                setEquipeId(equipeOf(t).id)
+              }}
+            />
+            <QuarterTimeField label="Fin" value={fin} onChange={setFin} />
           </div>
 
           {/* Day toggles — gold-pill segmented style, multi-select */}
@@ -599,7 +656,8 @@ function WeekFillDialog({
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className={cn('h-3 w-3 rounded-sm border', equipe.solid)} />
-            {equipe.label} · {equipe.debut} - {fin}
+            {equipe.label} · {debut} - {fin}
+            {overnight && <span>· fin le lendemain (nuit)</span>}
             {selDays.size > 0 && <span>· {selDays.size} jour{selDays.size > 1 ? 's' : ''}</span>}
           </div>
         </div>
@@ -670,19 +728,23 @@ function EditEntryDialog({
   onClose,
   onSaved,
 }: {
-  /** `entry` present = edit an existing block; absent = create one on `date`. */
-  target: { bonnetier: Bonnetier; date: string; entry?: PlanningEntry } | null
+  /** `entry` present = edit an existing block; absent = create one on `date`,
+   *  preset from `seed` (the row's nearest existing shift) when provided. */
+  target: { bonnetier: Bonnetier; date: string; entry?: PlanningEntry; seed?: { debut: string; fin: string } } | null
   onClose: () => void
   onSaved: () => void
 }) {
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
-  // Re-seed the time inputs whenever a different cell is opened.
+  // Re-seed the time inputs whenever a cell is opened; reset the marker on
+  // close so reopening the same cell re-reads its current values.
   const [seededKey, setSeededKey] = useState<string | null>(null)
   const targetKey = target ? `${target.bonnetier.IDbonnetier}|${target.date}` : null
+  if (!target && seededKey !== null) setSeededKey(null)
   if (target && targetKey !== seededKey) {
-    setDebut(snapQuarter(target.entry?.debut ?? EQUIPES[0].debut))
-    setFin(snapQuarter(target.entry?.fin ?? addHours(EQUIPES[0].debut, 7)))
+    const preset = target.entry ?? target.seed
+    setDebut(snapQuarter(preset?.debut ?? EQUIPES[0].debut))
+    setFin(snapQuarter(preset?.fin ?? addHours(EQUIPES[0].debut, 7)))
     setSeededKey(targetKey)
   }
 
