@@ -12,6 +12,14 @@ import './index.css'
 // Strip Dashlane/LastPass/1Password/Bitwarden autofill from every form control
 installAutofillBlocker()
 
+// Dev-only: when running inside a feature worktree the tooling sets
+// VITE_WORKTREE_LABEL (e.g. "planning"); prefix the tab title so parallel
+// worktree dev tabs are distinguishable in the browser. No-op in prod builds.
+const worktreeLabel = import.meta.env.VITE_WORKTREE_LABEL
+if (import.meta.env.DEV && worktreeLabel) {
+  document.title = `${worktreeLabel} · ${document.title}`
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
