@@ -26,7 +26,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { BobineIcon } from '@/components/icons/BobineIcon'
-import { TmRollIcon } from '@/components/icons/TmRollIcon'
 
 // PagePlaceholder takes a LucideIcon — widen it locally so our custom
 // SVG components (BobineIcon, TmRollIcon, etc.) are accepted too. They
@@ -53,7 +52,9 @@ const FilsStockPage = createPlaceholder('Stock fil', 'Lots de fil en stock', Pac
 const FilsFournisseursPage = createPlaceholder('Fournisseurs', 'Fournisseurs de fil', Building2)
 
 // Tombé Métier
-const TmReferencesPage = createPlaceholder('Références', 'Références tombé métier, composition et données techniques', PlaceholderIcon(TmRollIcon))
+// Références is shared verbatim with MPS_NG — imported from the sister repo
+// via the @mpsng alias (see vite.config.ts). Edit it there; both apps update.
+import { TombeMetierReferences } from '@mpsng/pages/TombeMetierReferences'
 const TmEchantillonsPage = createPlaceholder('Échantillons', 'Échantillons tombé métier', Layers)
 const TmStockPage = createPlaceholder('Stock tombé métier', 'Stock des pièces tombées métier', Package)
 
@@ -109,7 +110,7 @@ export const router = createBrowserRouter([
 
       // Tombé Métier
       { path: 'tombe-metier', element: <Navigate to="/tombe-metier/references" replace /> },
-      { path: 'tombe-metier/references', element: <TmReferencesPage /> },
+      { path: 'tombe-metier/references', element: <TombeMetierReferences /> },
       { path: 'tombe-metier/echantillons', element: <TmEchantillonsPage /> },
       { path: 'tombe-metier/stock', element: <TmStockPage /> },
 

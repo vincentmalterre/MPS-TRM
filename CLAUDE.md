@@ -2,19 +2,19 @@
 
 ## Project Overview
 
-MPS-TRM is the ERP web app for **Tricotage Malterre (TRM)**, the knitting production company of the Malterre Holding. It is the sister app of **MPS_NG** (`C:\dev\MPS_NG`, the ETS Malterre ERP) and replicates its design and architecture exactly, migrating the legacy WinDev app's "Tricotage Malterre" mode screen by screen.
+MPS-TRM is the ERP web app for **Tricotage Malterre (TRM)**, the knitting production company of the Malterre Holding. It is the sister app of **MPS_NG** (`C:\dev\etsmalterre\MPS_NG`, the ETS Malterre ERP) and replicates its design and architecture exactly, migrating the legacy WinDev app's "Tricotage Malterre" mode screen by screen.
 
 - **Company**: Tricotage Malterre (TRM) — knitting production (tricotage)
 - **Owner**: Vincent Malterre
 - **Legacy system**: the WinDev MPS app (`C:\Mes Projets\MPS\`) in Tricotage Malterre mode (red banner), plus the older standalone `C:\Mes Projets\TRMPROD\`
-- **Sister project**: MPS_NG (`C:\dev\MPS_NG`) — same design system, same conventions, same DB, same API
+- **Sister project**: MPS_NG (`C:\dev\etsmalterre\MPS_NG`) — same design system, same conventions, same DB, same API
 
 ## Architecture — frontend-only repo, shared API and DB
 
 **This repo contains only the web frontend.** There is deliberately no API here:
 
 - **Database**: the shared HFSQL `MPS` database (same server as MPS_NG). Shared tables (`client`, `commande_client`, …) are partitioned by `IDsociete` — **TRM = 2** (ETM = 1, Confection = 3). Every TRM write must set `IDsociete = 2`.
-- **API**: the **MPS_NG API** (`C:\dev\MPS_NG\apps\api`, dev port 8080). All HFSQL footgun-handling (encoding repair, bridge storm protection, accented columns, positional inserts) and TRM-specific logic (ETM↔TRM cross-ledger bridge, `isTricotageMalterreSst`) already live there. **New TRM endpoints get added to the MPS_NG API**, scoped `IDsociete = 2` — never build a second API stack on the shared tables.
+- **API**: the **MPS_NG API** (`C:\dev\etsmalterre\MPS_NG\apps\api`, dev port 8080). All HFSQL footgun-handling (encoding repair, bridge storm protection, accented columns, positional inserts) and TRM-specific logic (ETM↔TRM cross-ledger bridge, `isTricotageMalterreSst`) already live there. **New TRM endpoints get added to the MPS_NG API**, scoped `IDsociete = 2` — never build a second API stack on the shared tables.
 - **Auth**: the shared cookie auth (`mps_uid`) against the same API — login/user-picker, permissions and admin gating work identically to MPS_NG.
 - **Dev CORS**: this app runs on port **5175**, which is already in the MPS_NG API's `CORS_ORIGIN` list (`apps/api/.env.development`). If the port changes, update that list.
 
@@ -51,7 +51,7 @@ Mirrors the legacy WinDev app in Tricotage Malterre mode (top → bottom):
 1. **Tableau de bord** (`/`) — placeholder
 2. **Clients** — Commandes, Expéditions, Facturation, Gestion, Planning
 3. **Fils** — Références, Stock, Fournisseurs
-4. **Tombé Métier** — Références, Échantillons, Stock (custom `TmRollIcon`)
+4. **Tombé Métier** — **Références** (`/tombe-metier/references`, implemented — shared verbatim with MPS_NG, see "Shared screens" below), Échantillons, Stock (custom `TmRollIcon`)
 5. **Production** — Gestion des OF, Visitage, Prime, TRS
 6. **Atelier** — Maintenance, Productivité, Bonnetier, Quiz, **Planning** (`/atelier/planning`, implemented — weekly bonnetier grid over `planning_bonnetier` + desiderata dialog; API route `MPS_NG/apps/api/src/routes/planning-atelier.ts`)
 7. **Qualité** — Défauts récents, Retour client, Analyse
@@ -66,11 +66,22 @@ All other screens are `PagePlaceholder`s for now. Legacy references for each dom
 - `bonnetier` — accented columns `prénom`/`archivé` (HFSQL accent rules apply). Grid rows = `archivé=0 AND regleur=0`; regleurs are excluded (roles in `role_employe`: apprenti/bonnetier/visiteur/regleur).
 - `desiderata` — `DATE` (reserved word → returns uppercased; 8-char YYYYMMDD), `description`, `IDbonnetier`, `justifie`, `declare`. Writes use positional INSERT (max+1 PK) to avoid naming the reserved column. "En cours" = date ≥ today.
 
+## Shared screens (live cross-repo link with MPS_NG)
+
+Some screens are pixel-identical in both apps and hit the same non-partitioned data (e.g. Tombé Métier → Références over `/references-ecru`). Those are **not copied** — TRM imports the MPS_NG source file directly, so editing the one file updates both apps:
+
+- **Import**: `import { TombeMetierReferences } from '@mpsng/pages/TombeMetierReferences'` in `router.tsx`. The `@mpsng` alias points at `../../../MPS_NG/apps/web/src` (vite.config.ts + tsconfig paths) — the two repos **must stay sibling directories** under `C:\dev\etsmalterre\` (worktrees like `MPS-TRM-ref-tm` are siblings too, so they work).
+- **`@/` imports inside a shared screen resolve to THIS app's src** — the screen uses TRM's local copies of components/lib/hooks. Keep those copies in sync with MPS_NG (they currently differ only in line endings, plus the `API_URL` dev fallback in `lib/api.ts`).
+- **The source of truth lives in MPS_NG** — improve the screen there (or from here via the alias path, it's the same file). Never fork a TRM copy of a shared screen.
+- **Adding a new shared screen**: (1) import it via `@mpsng/pages/...` in `router.tsx`; (2) add its file path to the `content` array in `tailwind.config.js` (explicitly — no globs — or its Tailwind classes won't be generated); (3) check the data it touches is either non-partitioned or already TRM-scoped; (4) if it needs modules TRM doesn't have yet, copy those from MPS_NG first.
+- **Guardrails already in vite.config.ts** — `server.fs.allow` (serves out-of-root files in dev) and `resolve.dedupe` (prevents a second React copy from MPS_NG's node_modules, which would crash hooks). Don't remove either.
+- Consequence: TRM builds require the MPS_NG checkout to be present at the sibling path.
+
 ## Design system rule
 
 **Before building or modifying any user-facing screen, component, button, tab, card, dialog, or interaction pattern, you MUST invoke the `mps_designer` skill (`Skill(skill: "mps_designer")`).** Not optional — same rule as MPS_NG.
 
-**Before inventing a pattern, grep the MPS_NG gold-standard reference screens** (`C:\dev\MPS_NG\apps\web\src\pages\`): `Entreprises.tsx`, `FilsGestion.tsx`, `FilsStock.tsx`, `FilsCommandes.tsx`, `EtudesColoris.tsx`. Reuse the exact same icons, strings and dialog structures.
+**Before inventing a pattern, grep the MPS_NG gold-standard reference screens** (`C:\dev\etsmalterre\MPS_NG\apps\web\src\pages\`): `Entreprises.tsx`, `FilsGestion.tsx`, `FilsStock.tsx`, `FilsCommandes.tsx`, `EtudesColoris.tsx`. Reuse the exact same icons, strings and dialog structures.
 
 Key invariants (full detail in the skill):
 - Panel backgrounds `bg-zinc-100/80` (list/sidebar) / `bg-zinc-200/50` (header/footer) / `bg-white` (cards); `scrollbar-transparent` on scrollable panels. **Never hardcode hex values.**
@@ -100,12 +111,12 @@ pnpm install
 pnpm dev          # web on http://localhost:5175
 
 # The MPS_NG API must be running (dev port 8080):
-#   cd C:\dev\MPS_NG && pnpm dev
+#   cd C:\dev\etsmalterre\MPS_NG && pnpm dev
 ```
 
 ## Business Domain (Quick Reference)
 
-Same glossary as MPS_NG (`C:\dev\MPS_NG\claude_doc\business_glossary.md`).
+Same glossary as MPS_NG (`C:\dev\etsmalterre\MPS_NG\claude_doc\business_glossary.md`).
 
 | French | English |
 |--------|---------|

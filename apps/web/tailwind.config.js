@@ -4,6 +4,10 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    // Screens shared verbatim from MPS_NG (imported via the @mpsng alias in
+    // vite.config.ts). List each shared screen explicitly — globbing all of
+    // MPS_NG's pages would bloat the CSS with classes TRM never renders.
+    "../../../MPS_NG/apps/web/src/pages/TombeMetierReferences.tsx",
   ],
   theme: {
     container: {
