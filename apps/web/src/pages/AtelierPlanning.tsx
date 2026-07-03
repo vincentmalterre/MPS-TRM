@@ -539,7 +539,7 @@ function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: str
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Le commentaire apparaît en rouge en bas du PDF. L'aperçu se met à jour automatiquement.
+              Le commentaire apparaît dans un encadré en bas du PDF. L'aperçu se met à jour automatiquement.
             </p>
           </div>
 
