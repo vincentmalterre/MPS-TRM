@@ -87,7 +87,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             <NavLink
               key={submenu.href}
               to={submenu.href}
-              className={({ isActive }) =>
+              className={({ isActive }: { isActive: boolean }) =>
                 cn(
                   'px-4 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
                   isActive

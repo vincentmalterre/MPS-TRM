@@ -126,7 +126,7 @@ function MobileNavItem({ item, onNavigate }: MobileNavItemProps) {
             key={submenu.href}
             to={submenu.href}
             onClick={onNavigate}
-            className={({ isActive: linkActive }) =>
+            className={({ isActive: linkActive }: { isActive: boolean }) =>
               cn(
                 'flex h-10 items-center gap-3 rounded-md px-3 pl-10 text-sm transition-all',
                 linkActive
