@@ -113,7 +113,6 @@ export const mainNavigation: MainMenuItem[] = [
       { title: 'Maintenance', href: '/atelier/maintenance' },
       { title: 'Productivité', href: '/atelier/productivite' },
       { title: 'Bonnetier', href: '/atelier/bonnetier' },
-      { title: 'Quiz', href: '/atelier/quiz' },
       { title: 'Planning', href: '/atelier/planning' },
     ],
   },
@@ -189,7 +188,6 @@ export const routeTitles: Record<string, string> = {
   '/atelier/maintenance': 'Maintenance',
   '/atelier/productivite': 'Productivité',
   '/atelier/bonnetier': 'Bonnetier',
-  '/atelier/quiz': 'Quiz',
   '/atelier/planning': 'Planning',
   // Qualité
   '/qualite': 'Qualité',

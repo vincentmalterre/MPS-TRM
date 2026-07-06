@@ -18,7 +18,6 @@ import {
   Wrench,
   TrendingUp,
   HardHat,
-  GraduationCap,
   AlertTriangle,
   Undo2,
   BarChart3,
@@ -68,7 +67,6 @@ const ProductionTrsPage = createPlaceholder('TRS', 'Taux de rendement synthétiq
 const AtelierMaintenancePage = createPlaceholder('Maintenance', 'Maintenance des métiers : rouloir, garniture, nettoyages', Wrench)
 const AtelierProductivitePage = createPlaceholder('Productivité', 'Productivité de l\'atelier', TrendingUp)
 const AtelierBonnetierPage = createPlaceholder('Bonnetier', 'Suivi bonnetier', HardHat)
-const AtelierQuizPage = createPlaceholder('Quiz', 'Quiz de formation atelier', GraduationCap)
 // Planning — real screen
 import { AtelierPlanning } from '@/pages/AtelierPlanning'
 
@@ -126,7 +124,6 @@ export const router = createBrowserRouter([
       { path: 'atelier/maintenance', element: <AtelierMaintenancePage /> },
       { path: 'atelier/productivite', element: <AtelierProductivitePage /> },
       { path: 'atelier/bonnetier', element: <AtelierBonnetierPage /> },
-      { path: 'atelier/quiz', element: <AtelierQuizPage /> },
       { path: 'atelier/planning', element: <AtelierPlanning /> },
 
       // Qualité

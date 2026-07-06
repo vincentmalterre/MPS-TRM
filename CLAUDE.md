@@ -53,7 +53,7 @@ Mirrors the legacy WinDev app in Tricotage Malterre mode (top → bottom):
 3. **Fils** — Références, Stock, Fournisseurs
 4. **Tombé Métier** — **Références** (`/tombe-metier/references`, implemented — shared verbatim with MPS_NG, see "Shared screens" below), Échantillons, Stock (custom `TmRollIcon`)
 5. **Production** — Gestion des OF, Visitage, Prime, TRS
-6. **Atelier** — Maintenance, Productivité, Bonnetier, Quiz, **Planning** (`/atelier/planning`, implemented — weekly bonnetier grid over `planning_bonnetier` + desiderata dialog; API route `MPS_NG/apps/api/src/routes/planning-atelier.ts`)
+6. **Atelier** — Maintenance, Productivité, Bonnetier, **Planning** (`/atelier/planning`, implemented — weekly bonnetier grid over `planning_bonnetier` + desiderata dialog; API route `MPS_NG/apps/api/src/routes/planning-atelier.ts`)
 7. **Qualité** — Défauts récents, Retour client, Analyse
 8. **Rapports** — Production, Lots de fils, État stock fil, Analyse
 9. **Paramètres** — Utilisateurs (admin-only)
