@@ -8,6 +8,8 @@ export default {
     // vite.config.ts). List each shared screen explicitly — globbing all of
     // MPS_NG's pages would bloat the CSS with classes TRM never renders.
     "../../../MPS_NG/apps/web/src/pages/TombeMetierReferences.tsx",
+    "../../../MPS_NG/apps/web/src/pages/FilsReferences.tsx",
+    "../../../MPS_NG/apps/web/src/pages/FilsGestion.tsx",
   ],
   theme: {
     container: {

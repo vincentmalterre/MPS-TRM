@@ -9,7 +9,6 @@ import {
   Users,
   CalendarDays,
   Package,
-  Building2,
   Layers,
   ClipboardList,
   Eye,
@@ -46,9 +45,12 @@ const ClientsGestionPage = createPlaceholder('Gestion clients', 'Fiches clients,
 const ClientsPlanningPage = createPlaceholder('Planning', 'Planning des commandes clients', CalendarDays)
 
 // Fils
-const FilsReferencesPage = createPlaceholder('Références fils', 'Catalogue des références de fil', PlaceholderIcon(BobineIcon))
+// Références and Fournisseurs are shared verbatim with MPS_NG — imported from
+// the sister repo via the @mpsng alias (see vite.config.ts). Edit them there;
+// both apps update. (MPS_NG mounts FilsGestion at /fils/gestion — same screen.)
+import { FilsReferences } from '@mpsng/pages/FilsReferences'
+import { FilsGestion } from '@mpsng/pages/FilsGestion'
 const FilsStockPage = createPlaceholder('Stock fil', 'Lots de fil en stock', Package)
-const FilsFournisseursPage = createPlaceholder('Fournisseurs', 'Fournisseurs de fil', Building2)
 
 // Tombé Métier
 // Références is shared verbatim with MPS_NG — imported from the sister repo
@@ -102,9 +104,9 @@ export const router = createBrowserRouter([
 
       // Fils
       { path: 'fils', element: <Navigate to="/fils/references" replace /> },
-      { path: 'fils/references', element: <FilsReferencesPage /> },
+      { path: 'fils/references', element: <FilsReferences /> },
       { path: 'fils/stock', element: <FilsStockPage /> },
-      { path: 'fils/fournisseurs', element: <FilsFournisseursPage /> },
+      { path: 'fils/fournisseurs', element: <FilsGestion /> },
 
       // Tombé Métier
       { path: 'tombe-metier', element: <Navigate to="/tombe-metier/references" replace /> },

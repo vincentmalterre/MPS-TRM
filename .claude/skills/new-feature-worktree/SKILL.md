@@ -25,7 +25,19 @@ it targets the slot-0 master MPS_NG API on `:8080`. To point it at a different M
 
 A TRM worktree's web server needs an MPS_NG API on `:8080`. Start it once from an **MPS_NG**
 session with `/serve-main` (it serves master on API `8080` / web `3000`). If it isn't up,
-the TRM worktree still launches but its data calls 404 until you start it.
+the TRM worktree still launches but every screen shows
+**« Impossible de charger la liste. Vérifiez que l'API est accessible. »**
+
+This is not only a spin-up concern: the worktree's web server is detached and outlives
+sessions, but the `:8080` API has its own independent lifetime — the same banner can appear
+days later. Whenever you see it, check the API first:
+```powershell
+Test-NetConnection localhost -Port 8080 -InformationLevel Quiet
+```
+If it's down and no MPS_NG session is around for `/serve-main`, starting it directly works:
+`cd C:\dev\etsmalterre\MPS_NG\apps\api && pnpm dev` (verify `/api/health` returns 200).
+Note the ports 5171–5176 are all already in the API's `CORS_ORIGIN` — the web port is
+never the cause of this banner.
 
 ## Steps
 
@@ -47,8 +59,8 @@ the TRM worktree still launches but its data calls 404 until you start it.
    ```bash
    tail -n 40 ../MPS-TRM-<feature-name>/.dev-logs/web.log
    ```
-   If it says the MPS_NG API isn't reachable, start it with `/serve-main` from an MPS_NG
-   session — the TRM web will 404 its API calls until then.
+   If it says the MPS_NG API isn't reachable, start it (see the Prerequisite section) — the
+   TRM web will show the « Impossible de charger la liste » banner until then.
 
 4. **Report to the user** the worktree path, the web URL (`http://localhost:517N`), and the
    slot number. Tell them to **open a new Claude Code session in the worktree directory** to
