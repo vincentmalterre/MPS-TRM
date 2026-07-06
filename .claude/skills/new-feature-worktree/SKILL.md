@@ -67,6 +67,25 @@ never the cause of this banner.
    do the screen work — that session has `/feature-checkpoint` (sync) and `/feature-complete`
    (land) available.
 
+## Feature needs shared-API changes? → paired NG worktree
+
+MPS-TRM has no API; its endpoints live in the **MPS_NG API**. If this feature needs new or
+modified endpoints, do NOT edit the MPS_NG main checkout (it's the integration tree).
+Instead create a **pair of worktrees** with the same feature name:
+
+```bash
+# 1. NG worktree for the API changes (run from the MPS_NG checkout, or pass `ng`):
+node C:/dev/etsmalterre/MPS_NG/scripts/worktree/up.mjs <feature-name> ng        # → API on 808N
+# 2. TRM worktree pointed at that API:
+node C:/dev/etsmalterre/MPS_NG/scripts/worktree/up.mjs <feature-name> --api 808N
+```
+
+Work on the API in the NG worktree session and the screen in the TRM worktree session
+(or one session, editing the sibling worktree by path). **Landing order**: NG branch first
+(`/feature-complete` in the NG worktree), then the TRM branch. Deploys stay per-repo:
+NG `/mps_deploy` ships the API, TRM `/mps_deploy` ships the web. Full rule in
+`MPS_NG/claude_doc/worktrees.md` §"Shared-API changes".
+
 ## Notes / failure modes
 
 - "All 6 MPS-TRM worktree slots are in use" → run `/worktree-status`; finish or tear one

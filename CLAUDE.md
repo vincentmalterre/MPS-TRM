@@ -20,6 +20,13 @@ MPS-TRM is the ERP web app for **Tricotage Malterre (TRM)**, the knitting produc
 
 When implementing a feature here you will therefore usually touch **two repos**: the screen in `MPS-TRM/apps/web`, and its endpoints in `MPS_NG/apps/api`. All HFSQL rules from `MPS_NG/CLAUDE.md` apply to those endpoints — read them before writing any route.
 
+**Paired-worktree rule for API changes**: API work is done in an **MPS_NG worktree** (never in the MPS_NG main checkout — that's NG's integration tree) and lands through NG's own pipeline (`feat/*` → NG `master` → NG `/mps_deploy`). A TRM feature needing endpoints = a pair of same-named worktrees, the TRM one spun up with `--api 808N` pointing at the NG one. Landing order: NG branch first, then TRM. Full rule: `MPS_NG/claude_doc/worktrees.md` §"Shared-API changes"; the `/feature-complete` skill enforces the guardrail.
+
+## Production / deploy
+
+- **Host**: `http://mpstrm.malterre` — nginx on `mfprod-erp` (`10.10.2.165`), dist at `/home/debian/mps_trm/dist`, `/api/` proxied to the shared MPS_NG API (`10.10.2.163:8081`).
+- **Deploy ownership**: this repo's `/mps_deploy` skill ships the **TRM web bundle only**. The shared API (and `mpsng.malterre`) is deployed exclusively from the MPS_NG checkout with its `/mps_deploy`. If a TRM feature needed API changes, the API deploy (from MPS_NG) must happen **before or with** the TRM web deploy.
+
 ## Branding
 
 Identical to MPS_NG — same colors, same design system:
