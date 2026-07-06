@@ -5,12 +5,15 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Plus,
   Printer,
   Repeat,
   Trash2,
+  Users,
   X,
 } from 'lucide-react'
 import { apiFetch, API_URL } from '@/lib/api'
@@ -149,6 +152,20 @@ function fmtFr(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR')
 }
 
+// ── Hidden bonnetiers — per-workstation display preference ──
+
+const HIDDEN_BONNETIERS_KEY = 'trm-planning-hidden-bonnetiers'
+
+function loadHiddenBonnetiers(): Set<number> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_BONNETIERS_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(arr) ? arr.filter((n): n is number => typeof n === 'number') : [])
+  } catch {
+    return new Set()
+  }
+}
+
 // ── Page ─────────────────────────────────────────────────
 
 export function AtelierPlanning() {
@@ -166,6 +183,13 @@ export function AtelierPlanning() {
   const [clearTarget, setClearTarget] = useState<Bonnetier | null>(null)
   const [desiderataOpen, setDesiderataOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
+  const [visibilityOpen, setVisibilityOpen] = useState(false)
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(loadHiddenBonnetiers)
+
+  // Persist the hide/show preference for this workstation.
+  useEffect(() => {
+    localStorage.setItem(HIDDEN_BONNETIERS_KEY, JSON.stringify([...hiddenIds]))
+  }, [hiddenIds])
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => fmtLocalDate(addDays(weekStart, i))),
@@ -189,6 +213,25 @@ export function AtelierPlanning() {
     queryKey: ['atelier-planning', from, to],
     queryFn: () => apiFetch(`/planning-atelier/entries?from=${from}&to=${to}`),
   })
+
+  // Grid rows minus the hidden ones. Hidden ids that no longer match an
+  // active bonnetier (archived since) are simply ignored.
+  const visibleBonnetiers = useMemo(
+    () => (bonnetiers ?? []).filter((b) => !hiddenIds.has(b.IDbonnetier)),
+    [bonnetiers, hiddenIds],
+  )
+  const excludedIds = useMemo(
+    () => (bonnetiers ?? []).filter((b) => hiddenIds.has(b.IDbonnetier)).map((b) => b.IDbonnetier),
+    [bonnetiers, hiddenIds],
+  )
+
+  const toggleHidden = (id: number) =>
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // (IDbonnetier, date) → entry, for O(1) cell lookups.
   const entryByCell = useMemo(() => {
@@ -261,6 +304,19 @@ export function AtelierPlanning() {
         <Button
           variant="outline"
           size="icon"
+          className={cn('h-9 w-9', excludedIds.length > 0 && 'text-accent border-accent/40 hover:text-accent')}
+          title={
+            excludedIds.length > 0
+              ? `Bonnetiers affichés (${excludedIds.length} masqué${excludedIds.length > 1 ? 's' : ''})`
+              : 'Bonnetiers affichés'
+          }
+          onClick={() => setVisibilityOpen(true)}
+        >
+          <Users className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
           className="h-9 w-9"
           title="Desiderata"
           onClick={() => setDesiderataOpen(true)}
@@ -316,6 +372,25 @@ export function AtelierPlanning() {
               <AlertCircle className="h-4 w-4" />
               Erreur de chargement des bonnetiers
             </div>
+          ) : visibleBonnetiers.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+              {(bonnetiers ?? []).length === 0 ? (
+                <p>Aucun bonnetier actif</p>
+              ) : (
+                <>
+                  <p>Tous les bonnetiers sont masqués.</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-accent hover:text-accent hover:bg-accent/10"
+                    onClick={() => setVisibilityOpen(true)}
+                  >
+                    <Users className="h-3.5 w-3.5 mr-1.5" />
+                    Gérer les bonnetiers affichés
+                  </Button>
+                </>
+              )}
+            </div>
           ) : (
             <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
               <colgroup>
@@ -326,7 +401,7 @@ export function AtelierPlanning() {
                 <col style={{ width: '8%' }} />
               </colgroup>
               <tbody>
-                {(bonnetiers ?? []).map((b) => {
+                {visibleBonnetiers.map((b) => {
                   const rowEntries = days
                     .map((d) => entryByCell.get(`${b.IDbonnetier}|${d}`))
                     .filter((e): e is PlanningEntry => e !== undefined)
@@ -444,7 +519,8 @@ export function AtelierPlanning() {
             </span>
           ))}
           <span className="ml-auto">
-            {(bonnetiers ?? []).length} bonnetier{(bonnetiers ?? []).length > 1 ? 's' : ''}
+            {visibleBonnetiers.length} bonnetier{visibleBonnetiers.length > 1 ? 's' : ''}
+            {excludedIds.length > 0 && ` · ${excludedIds.length} masqué${excludedIds.length > 1 ? 's' : ''}`}
           </span>
         </div>
       </div>
@@ -487,14 +563,34 @@ export function AtelierPlanning() {
 
       <DesiderataDialog open={desiderataOpen} onClose={() => setDesiderataOpen(false)} bonnetiers={bonnetiers ?? []} />
 
-      <PrintPlanningDialog open={printOpen} from={from} onClose={() => setPrintOpen(false)} />
+      <PrintPlanningDialog open={printOpen} from={from} excludedIds={excludedIds} onClose={() => setPrintOpen(false)} />
+
+      <VisibilityDialog
+        open={visibilityOpen}
+        onClose={() => setVisibilityOpen(false)}
+        bonnetiers={bonnetiers ?? []}
+        hiddenIds={hiddenIds}
+        onToggle={toggleHidden}
+        onShowAll={() => setHiddenIds(new Set())}
+      />
     </div>
   )
 }
 
 // ── Print dialog — comment + live PDF preview (§18.C) ─────
 
-function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: string; onClose: () => void }) {
+function PrintPlanningDialog({
+  open,
+  from,
+  excludedIds,
+  onClose,
+}: {
+  open: boolean
+  from: string
+  /** Bonnetiers hidden on screen — also left off the printed document. */
+  excludedIds: number[]
+  onClose: () => void
+}) {
   const [comment, setComment] = useState('')
   // Debounced copy driving the iframe preview, so the PDF isn't re-rendered
   // on every keystroke.
@@ -511,7 +607,9 @@ function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: str
     }
   }, [open])
 
-  const pdfUrl = (c: string) => `${API_URL}/planning-atelier/pdf?from=${from}&comment=${encodeURIComponent(c)}`
+  const pdfUrl = (c: string) =>
+    `${API_URL}/planning-atelier/pdf?from=${from}&comment=${encodeURIComponent(c)}` +
+    (excludedIds.length > 0 ? `&exclude=${excludedIds.join(',')}` : '')
   const previewUrl = `${pdfUrl(previewComment)}#view=FitH`
 
   return (
@@ -541,6 +639,14 @@ function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: str
             <p className="text-xs text-muted-foreground">
               Le commentaire apparaît dans un encadré en bas du PDF. L'aperçu se met à jour automatiquement.
             </p>
+            {excludedIds.length > 0 && (
+              <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                <EyeOff className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 opacity-60" />
+                {excludedIds.length > 1
+                  ? `Les ${excludedIds.length} bonnetiers masqués ne figureront pas sur le document.`
+                  : 'Le bonnetier masqué ne figurera pas sur le document.'}
+              </p>
+            )}
           </div>
 
           {/* Right: PDF preview + actions */}
@@ -561,6 +667,80 @@ function PrintPlanningDialog({ open, from, onClose }: { open: boolean; from: str
             </div>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Visibility dialog — hide/show bonnetiers in the grid ──
+
+function VisibilityDialog({
+  open,
+  onClose,
+  bonnetiers,
+  hiddenIds,
+  onToggle,
+  onShowAll,
+}: {
+  open: boolean
+  onClose: () => void
+  bonnetiers: Bonnetier[]
+  hiddenIds: Set<number>
+  onToggle: (id: number) => void
+  onShowAll: () => void
+}) {
+  const hiddenCount = bonnetiers.filter((b) => hiddenIds.has(b.IDbonnetier)).length
+
+  return (
+    <Dialog open={open} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-sm" onClose={onClose}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-accent" />
+            Bonnetiers affichés
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-4 space-y-3">
+          <div className="max-h-[50vh] overflow-y-auto rounded-lg border bg-zinc-100/80 p-2 space-y-1 scrollbar-transparent">
+            {bonnetiers.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic text-center py-6">Aucun bonnetier actif</p>
+            ) : (
+              bonnetiers.map((b) => {
+                const hidden = hiddenIds.has(b.IDbonnetier)
+                return (
+                  <label
+                    key={b.IDbonnetier}
+                    className={cn(
+                      'flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer select-none text-sm transition-colors hover:bg-accent/10',
+                      hidden && 'text-muted-foreground',
+                    )}
+                  >
+                    <Checkbox checked={!hidden} onCheckedChange={() => onToggle(b.IDbonnetier)} />
+                    <span className="truncate">
+                      {b.prenom} {b.nom}
+                    </span>
+                    {hidden && <EyeOff className="h-3.5 w-3.5 ml-auto flex-shrink-0 opacity-60" />}
+                  </label>
+                )
+              })
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Les bonnetiers masqués n'apparaissent ni dans la grille ni sur le PDF imprimé. Ce réglage est propre à ce
+            poste.
+          </p>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="ghost" size="sm" className="mr-auto" disabled={hiddenCount === 0} onClick={onShowAll}>
+            <Eye className="h-3.5 w-3.5 mr-1.5" />
+            Tout afficher
+          </Button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Fermer
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
