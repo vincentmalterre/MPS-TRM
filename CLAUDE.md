@@ -109,7 +109,7 @@ Key invariants (full detail in the skill):
 
 - **Code**: English. **UI**: French. **Comments**: English.
 - **"check last screenshot"** → read the latest file in `%USERPROFILE%\Pictures\Screenshots`.
-- Git remote: `github.com/vincentmalterre/MPS-TRM` (vincentmalterre account).
+- Git remote: `github.com/etsmalterre/MPS-TRM` (etsmalterre account).
 
 ## Quick Start
 
