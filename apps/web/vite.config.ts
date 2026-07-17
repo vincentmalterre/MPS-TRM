@@ -22,6 +22,7 @@ export default defineConfig({
       manifest: {
         name: 'MPS TRM - Tricotage Malterre',
         short_name: 'MPS TRM',
+        lang: 'fr',
         description: 'Système ERP pour Tricotage Malterre - Production tricotage',
         theme_color: '#00243E',
         background_color: '#ffffff',
