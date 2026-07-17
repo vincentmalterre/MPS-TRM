@@ -24,7 +24,7 @@ export default defineConfig({
         short_name: 'MPS TRM',
         lang: 'fr',
         description: 'Système ERP pour Tricotage Malterre - Production tricotage',
-        theme_color: '#00243E',
+        theme_color: '#143D6B',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
